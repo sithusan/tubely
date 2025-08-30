@@ -1,9 +1,9 @@
 import { getBearerToken, validateJWT } from "../auth";
 import { respondWithJSON } from "./json";
-import { getVideo } from "../db/videos";
+import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
-import { BadRequestError, NotFoundError } from "./errors";
+import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
 
 type Thumbnail = {
   data: ArrayBuffer;
@@ -47,7 +47,42 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
 
   console.log("uploading thumbnail for video", videoId, "by user", userID);
 
-  // TODO: implement the upload here
+  const formData = await req.formData();
 
-  return respondWithJSON(200, null);
+  const file = formData.get("thumbnail");
+
+  if (!(file instanceof File)) {
+    throw new BadRequestError("Thumbnail file missing");
+  }
+
+  const MAX_UPLOAD_SIZE = 10 << 20; // Bit shifting. shifting left by n times is 2^n. so n^20. (n^20 === 10 * 1024 * 1024)
+
+  if (file.size > MAX_UPLOAD_SIZE) {
+    throw new BadRequestError(
+      "Thumbnail file size is larger than max upload size"
+    );
+  }
+
+  const video = await getVideo(cfg.db, videoId);
+
+  if (video === undefined) {
+    throw new NotFoundError("Video not found");
+  }
+
+  if (video.userID !== userID) {
+    throw new UserForbiddenError("Forbidden");
+  }
+
+  const thumbnail: Thumbnail = {
+    data: await file.arrayBuffer(),
+    mediaType: file.type,
+  };
+
+  videoThumbnails.set(video.id, thumbnail);
+
+  video.thumbnailURL = `http://localhost:${cfg.port}/api/thumbnails/${video.id}`;
+
+  updateVideo(cfg.db, video);
+
+  return respondWithJSON(200, video);
 }
