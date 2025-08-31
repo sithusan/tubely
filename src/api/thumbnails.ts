@@ -25,6 +25,13 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new BadRequestError("Thumbnail file missing");
   }
 
+  const allowMimeTypes = ["image/jpeg", "image/png"];
+  const fileMimeType = file.type;
+
+  if (!allowMimeTypes.includes(fileMimeType)) {
+    throw new BadRequestError("Mimetype not allowed");
+  }
+
   const MAX_UPLOAD_SIZE = 10 << 20; // Bit shifting. shifting left by n times is 2^n. so n^20. (n^20 === 10 * 1024 * 1024)
 
   if (file.size > MAX_UPLOAD_SIZE) {
@@ -45,7 +52,7 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
 
   const filePath = path.join(
     cfg.assetsRoot,
-    `/${video.id}.${file.type.split("/")[1]}`
+    `/${video.id}.${fileMimeType.split("/")[1]}`
   );
 
   Bun.write(filePath, await file.arrayBuffer());
