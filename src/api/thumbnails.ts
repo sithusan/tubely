@@ -5,6 +5,7 @@ import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -50,10 +51,11 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new UserForbiddenError("Forbidden");
   }
 
-  const filePath = path.join(
-    cfg.assetsRoot,
-    `/${video.id}.${fileMimeType.split("/")[1]}`
-  );
+  const fileName = `${randomBytes(32).toString("base64url")}.${
+    fileMimeType.split("/")[1]
+  }`;
+
+  const filePath = path.join(cfg.assetsRoot, fileName);
 
   Bun.write(filePath, await file.arrayBuffer());
 
