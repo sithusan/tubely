@@ -4,6 +4,7 @@ import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
+import path from "node:path";
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -42,11 +43,14 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new UserForbiddenError("Forbidden");
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer()).toBase64();
+  const filePath = path.join(
+    cfg.assetsRoot,
+    `/${video.id}.${file.type.split("/")[1]}`
+  );
 
-  const dataURL = `data:${file.type};base64,${buffer}`;
+  Bun.write(filePath, await file.arrayBuffer());
 
-  video.thumbnailURL = dataURL;
+  video.thumbnailURL = `http://localhost:${cfg.port}/${filePath}`;
 
   updateVideo(cfg.db, video);
 
