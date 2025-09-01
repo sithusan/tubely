@@ -6,6 +6,7 @@ import { getBearerToken, validateJWT } from "../auth";
 import { getVideo, updateVideo } from "../db/videos";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
+import { rm } from "node:fs/promises";
 
 export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -60,7 +61,9 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
 
   video.videoURL = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${fileName}`;
 
-  await updateVideo(cfg.db, video);
+  updateVideo(cfg.db, video);
+
+  await rm(filePath, { force: true });
 
   return respondWithJSON(200, null);
 }
