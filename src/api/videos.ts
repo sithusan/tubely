@@ -57,13 +57,63 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
 
   Bun.write(filePath, await file.arrayBuffer());
 
-  cfg.s3Client.write(fileName, Bun.file(filePath));
+  const ratio = await getVideoAspectRatio(filePath);
 
-  video.videoURL = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${fileName}`;
+  cfg.s3Client.write(`${ratio}/${fileName}`, Bun.file(filePath));
+
+  video.videoURL = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${ratio}/${fileName}`;
 
   updateVideo(cfg.db, video);
 
   await rm(filePath, { force: true });
 
   return respondWithJSON(200, null);
+}
+
+async function getVideoAspectRatio(filePath: string): Promise<string> {
+  const process = Bun.spawn([
+    "ffprobe",
+    "-v",
+    "error",
+    "-select_streams",
+    "v:0",
+    "-show_entries",
+    "stream=width,height",
+    "-of",
+    "json",
+    filePath,
+  ]);
+
+  const [stdout, stderr, exited] = await Promise.all([
+    new Response(process.stdout).json(),
+    new Response(process.stderr).text(),
+    process.exited,
+  ]);
+
+  if (exited !== 0) {
+    throw new Error("Error while getting aspect ratios");
+  }
+
+  if (stderr.length > 0) {
+    throw new Error(`Error while getting aspect ratios : ${stderr}`);
+  }
+
+  if (stdout.streams === undefined || stdout.streams.length === 0) {
+    throw new Error("No video streams found");
+  }
+
+  const { width, height } = stdout.streams[0] as {
+    width: number;
+    height: number;
+  };
+
+  const ratio = width / height;
+
+  if (ratio > 1.7) {
+    return "landscape"; // wider than ~1.7
+  }
+  if (ratio < 0.6) {
+    return "portrait"; // narrower than ~0.6
+  }
+  return "other";
 }
