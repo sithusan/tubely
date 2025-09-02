@@ -1,9 +1,9 @@
 import { respondWithJSON } from "./json";
 import { type ApiConfig } from "../config";
-import type { BunRequest } from "bun";
+import { type BunRequest } from "bun";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
 import { getBearerToken, validateJWT } from "../auth";
-import { getVideo, updateVideo } from "../db/videos";
+import { getVideo, updateVideo, type Video } from "../db/videos";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { rm } from "node:fs/promises";
@@ -63,16 +63,18 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
 
   cfg.s3Client.write(`${ratio}/${fileName}`, Bun.file(processedFilePath));
 
-  video.videoURL = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${ratio}/${fileName}`;
+  video.videoURL = `${ratio}/${fileName}`;
 
   updateVideo(cfg.db, video);
+
+  const videoWithPresignedUrl = dbVideoToSignedVideo(cfg, video);
 
   await Promise.all([
     rm(filePath, { force: true }),
     rm(processedFilePath, { force: true }),
   ]);
 
-  return respondWithJSON(200, null);
+  return respondWithJSON(200, videoWithPresignedUrl);
 }
 
 async function getVideoAspectRatio(filePath: string): Promise<string> {
@@ -150,4 +152,26 @@ async function processVideoForFastStart(
   }
 
   return processedFilePath;
+}
+
+export function dbVideoToSignedVideo(cfg: ApiConfig, video: Video): Video {
+  if (video.videoURL === undefined) {
+    throw new BadRequestError(
+      "Video URL is required to generate an presigned URL"
+    );
+  }
+
+  video.videoURL = generatePresignedURL(cfg, video.videoURL, 300);
+
+  return video;
+}
+
+function generatePresignedURL(
+  cfg: ApiConfig,
+  key: string,
+  expireTime: number
+): string {
+  return cfg.s3Client.presign(key, {
+    expiresIn: expireTime,
+  });
 }
