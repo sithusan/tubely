@@ -63,7 +63,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
 
   cfg.s3Client.write(`${ratio}/${fileName}`, Bun.file(processedFilePath));
 
-  video.videoURL = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${ratio}/${fileName}`;
+  video.videoURL = `https://${cfg.s3CfDistribution}/${ratio}/${fileName}`;
 
   updateVideo(cfg.db, video);
 
